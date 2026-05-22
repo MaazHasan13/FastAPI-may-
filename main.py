@@ -1,51 +1,83 @@
-from fastapi import FastAPI,Depends
-
-from sqlalchemy import create_engine,Column,Integer,String
-from sqlalchemy.orm import sessionmaker, declarative_base,Session
-
-
+from fastapi import FastAPI , HTTPException,Depends,Header
+from jose import jwt
+from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
+from datetime import datetime,timedelta,timezone
+from passlib.context import CryptContext
+from jose import JWTError
 app = FastAPI()
 
-DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False}
-)
+##secreate key
 
-sessionLocal = sessionmaker(bind=engine)
-Base = declarative_base()
-class Todo(Base):
-    __tablename__ = "todos"
-    id = Column(Integer,primary_key=True,index=True)
-    title = Column(String)
-    completed = Column(String)
+SECREAT_KEY = "mysecret"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES =30
 
-Base.metadata.create_all(bind=engine)
+#PASSWORD HASING SETUP
+pwd_context = CryptContext(schemes = ["bcrypt"])
 
-def get_db():
-    db = sessionLocal()
-    try:
-        yield db
-    finally:    
-        db.close()
+#oauthsetup
+oauth2_schema = OAuth2PasswordBearer(tokenUrl="login")
 
-@app.post("/todos")
-def create_todo(title:str,db:Session = Depends(get_db)):
-    todo = Todo(title = title, completed = "False")
-    db.add(todo)
-    db.commit()
-    db.refresh(todo)
-    return {
-    "message": "Todo created",
-    "data": todo
+#dummy user db
+fake_user_db = {
+    "admin":{
+        "username" : "admin",
+        "hashed_password" : pwd_context.hash("1234")
+    }
 }
 
-#read API  
-@app.get("/todos")
-def get_todos(db:Session = Depends(get_db)):
-    todos = db.query(Todo).all()
+#hash password
+def hash_password(password:str):
+    return pwd_context.hash(password)
 
+#verify password
+def varify_password(plain_password,hased_password):
+    return pwd_context.verify(plain_password,hased_password)
+
+
+
+def create_token(data:dict):
+    to_encode = data.copy()
+    expire  = datetime.now(timezone.utc) + timedelta(minutes=30)
+    to_encode.update({
+        "exp":expire
+    })
+
+    token = jwt.encode(to_encode,SECREAT_KEY,algorithm=ALGORITHM)
+
+    return token
+
+#login api(token genrate oauth2from)
+f
+@app.post("/login")
+def login(username:str,password:str):
+    if username != "admin" or password != "1234":
+        raise HTTPException(
+            status_code=401,
+            detail="invalid username and password"
+        )
+    token = create_token({
+        "sub" : username
+    })
     return{
-        "Total":len(todos),
-        "data" : todos
+        "access_token":token
+
+   }
+#token veryfy
+def varify_token(token:str=Header(None)):
+    try:
+        payload = jwt.decode(token,SECREAT_KEY,algorithms=[ALGORITHM])
+        return payload
+    except:
+        raise HTTPException(
+            status_code=401,
+            detail="invalid username and password"
+        )
+    
+#protected rpute
+@app.get("/secure")
+def secure_data(user = Depends(varify_token)):
+    return{
+        "message" : "secure Data Accesssed",
+        "user" : user
     }
