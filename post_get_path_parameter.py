@@ -56,14 +56,14 @@ def create_emp(emp:Employee):
 #get api for employee
 @app.get("/emp/{emp_name}")
 def get_data(emp_name:str):
-    for temp in emp_data:
+    for temp in emp_data: #db name
         if temp.emp_name == emp_name :
             return{
                 "message": "employee found",
                 "detail" : temp 
             }
         
-        
+
         else:
             return{
                 "message":"emp not found"
